@@ -120,13 +120,13 @@ jobs:
         else
           echo "生成默认配置文件"
           cat > "$IB_DIR/.config" << EOF
-CONFIG_TARGET_x86=y
-CONFIG_TARGET_x86_64=y
-CONFIG_TARGET_x86_64_DEVICE_${{ env.PROFILE }}=y
-CONFIG_TARGET_IMAGES_GZIP=y
-CONFIG_VMDK_IMAGES=y
-CONFIG_GRUB_IMAGES=y
-EOF
+      CONFIG_TARGET_x86=y
+      CONFIG_TARGET_x86_64=y
+      CONFIG_TARGET_x86_64_DEVICE_${{ env.PROFILE }}=y
+      CONFIG_TARGET_IMAGES_GZIP=y
+      CONFIG_VMDK_IMAGES=y
+      CONFIG_GRUB_IMAGES=y
+      EOF
           
           if [ "${{ github.event.inputs.ssh }}" == "true" ]; then
             echo "CONFIG_PACKAGE_dropbear=y" >> "$IB_DIR/.config"
