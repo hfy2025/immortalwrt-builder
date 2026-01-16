@@ -10,7 +10,7 @@ on:
 
 env:
   DOCKER_IMAGE: openwrt/imagebuilder:x86-64-openwrt-25.12
-  CONFIG_FILE: x86_64.config
+  CONFIG_FILE: seed.config
   DIY_P1_SH: diy-part1.sh
   DIY_P2_SH: diy-part2.sh
   UPLOAD_RELEASE: true
@@ -44,14 +44,22 @@ jobs:
     - name: 极速生成固件
       id: compile
       run: |
+        # 进入 ImageBuilder 根目录 (通常是 /builder)
+        cd /builder
+        
+        # 将配置文件拷贝到编译目录
+        [ -f "$GITHUB_WORKSPACE/$CONFIG_FILE" ] && cp "$GITHUB_WORKSPACE/$CONFIG_FILE" .config
+        
         # 解析 .config 中的包列表
-        PACKAGES=$(grep '^CONFIG_PACKAGE_' $CONFIG_FILE | grep '=y' | sed 's/CONFIG_PACKAGE_//;s/=y//' | tr '\n' ' ')
+        PACKAGES=$(grep '^CONFIG_PACKAGE_' .config | grep '=y' | sed 's/CONFIG_PACKAGE_//;s/=y//' | tr '\n' ' ')
         
         # 执行 ImageBuilder 核心命令
-        # 显式传递分区大小环境变量给 make image
-        make image PACKAGES="$PACKAGES" FILES="files" \
-           KERNEL_PARTSIZE=$KERNEL_PARTSIZE \
-           ROOTFS_PARTSIZE=$ROOTFS_PARTSIZE
+        # 显式传递分区大小环境变量，FILES 指向工作区的 files 目录
+        make image PACKAGES="$PACKAGES" FILES="$GITHUB_WORKSPACE/files"            KERNEL_PARTSIZE=$KERNEL_PARTSIZE            ROOTFS_PARTSIZE=$ROOTFS_PARTSIZE
+        
+        # 将生成的固件拷贝回工作区以便后续发布
+        mkdir -p $GITHUB_WORKSPACE/bin/targets/x86/64/
+        cp -r bin/targets/x86/64/* $GITHUB_WORKSPACE/bin/targets/x86/64/
         
         echo "DEVICE_NAME=x86_64" >> $GITHUB_ENV
 
@@ -59,8 +67,8 @@ jobs:
       uses: softprops/action-gh-release@v1
       if: env.UPLOAD_RELEASE == 'true'
       with:
-        tag_name: ImmortalWrt-x86_x86_64_${{ env.FILE_DATE }}
-        name: ImmortalWrt-x86 极速发布 [${{ env.FILE_DATE }}]
+        tag_name: ImmortalWrt_x86_64_${{ env.FILE_DATE }}
+        name: ImmortalWrt 极速发布 [${{ env.FILE_DATE }}]
         body: |
           编译完成！
           构建模式: Docker ImageBuilder (极速)
