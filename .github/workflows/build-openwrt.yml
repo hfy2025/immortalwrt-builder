@@ -1,17 +1,21 @@
-name: OpenWrt Builder
+name: 🔧 Build ImmortalWrt x86-64
 
 on:
-  repository_dispatch:
-  workflow_dispatch:
+  workflow_dispatch: # 允许在 GitHub 网页手动触发编译
+  push:
+    branches: [ main, master ] # 当向主分支推送代码时自动触发（可选）
+  schedule:
+    - cron: '0 2 * * 0' # 每周日凌晨2点自动编译（可选，UTC时间）
 
 env:
+  # --- 核心配置，必须修改 ---
   REPO_URL: https://github.com/immortalwrt/immortalwrt
   REPO_BRANCH: openwrt-25.12
-  FEEDS_CONF: feeds.conf.default
-  CONFIG_FILE: .config
-  DIY_P1_SH: diy-part1.sh
-  DIY_P2_SH: diy-part2.sh
-  UPLOAD_BIN_DIR: false
+  # --- 固件配置 ---
+  TARGET: x86
+  SUBTARGET: 64
+  TARGET_PROFILE: generic
+  # --- 功能开关 ---
   UPLOAD_FIRMWARE: true
   UPLOAD_RELEASE: true
   TZ: Asia/Shanghai
@@ -19,130 +23,136 @@ env:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    container:
+      image: ubuntu:22.04
+    defaults:
+      run:
+        working-directory: /home/build/openwrt
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@main
+    # 步骤1：检出本仓库代码（获取本文件及下面的 diy 脚本、config）
+    - name: 🚚 Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        path: repository
 
-    - name: Initialization environment
-      env:
-        DEBIAN_FRONTEND: noninteractive
+    # 步骤2：准备编译环境与依赖
+    - name: ⚙️ Setup Build Environment
       run: |
-        sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-        sudo docker image prune --all --force
-        sudo -E apt-get -qq update
-        sudo -E apt-get -qq install ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp ninja-build p7zip p7zip-full patch pkgconf python2.7 python3 python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
-        sudo -E apt-get -qq autoremove --purge
-        sudo -E apt-get -qq clean
-        sudo timedatectl set-timezone "$TZ"
-        sudo mkdir -p /workdir
-        sudo chown $USER:$GROUPS /workdir
+        apt-get update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y \
+          ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
+          bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext \
+          gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 \
+          libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev \
+          libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev \
+          libssl-dev libtool lrzsz mkisofs msmtp ninja-build p7zip p7zip-full patch \
+          pkgconf python2.7 python3 python3-pyelftools python3-setuptools qemu-utils \
+          rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip \
+          vim wget xmlto xxd zlib1g-dev zstd jq rename
+        apt-get clean
 
-    - name: Clone source code
-      working-directory: /workdir
+    # 步骤3：克隆 ImmortalWrt 源码
+    - name: 📥 Clone Source Code
       run: |
-        df -hT $PWD
-        git clone $REPO_URL -b $REPO_BRANCH openwrt
-        ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+        git clone $REPO_URL -b $REPO_BRANCH /home/build/openwrt
+        cd /home/build/openwrt
+        # 应用自定义 feeds 配置（如果存在）
+        [ -f /home/build/repository/feeds.conf.custom ] && cp /home/build/repository/feeds.conf.custom feeds.conf.default
 
-    - name: Load custom feeds
+    # 步骤4：执行第一阶段自定义脚本
+    - name: 🔨 Run DIY Script Part 1
       run: |
-        [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
-        chmod +x $DIY_P1_SH
-        cd openwrt
-        $GITHUB_WORKSPACE/$DIY_P1_SH
+        cd /home/build/openwrt
+        if [ -f /home/build/repository/diy-part1.sh ]; then
+          chmod +x /home/build/repository/diy-part1.sh
+          /home/build/repository/diy-part1.sh
+        fi
 
-    - name: Update feeds
-      run: cd openwrt && ./scripts/feeds update -a
-
-    - name: Install feeds
-      run: cd openwrt && ./scripts/feeds install -a
-
-    - name: Load custom configuration
+    # 步骤5：更新并安装所有软件包源
+    - name: 📦 Update and Install Feeds
       run: |
-        [ -e files ] && mv files openwrt/files
-        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
-        chmod +x $DIY_P2_SH
-        cd openwrt
-        $GITHUB_WORKSPACE/$DIY_P2_SH
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
 
-    - name: Download package
-      id: package
+    # 步骤6：执行第二阶段自定义脚本并应用配置文件
+    - name: 🔨 Run DIY Script Part 2 & Load Config
       run: |
-        cd openwrt
+        # 应用配置文件
+        [ -f /home/build/repository/.config ] && cp /home/build/repository/.config .config
+        # 应用自定义文件（如网络、防火墙配置）
+        [ -d /home/build/repository/files ] && cp -rf /home/build/repository/files/* files/
+        # 运行第二阶段脚本
+        if [ -f /home/build/repository/diy-part2.sh ]; then
+          chmod +x /home/build/repository/diy-part2.sh
+          /home/build/repository/diy-part2.sh
+        fi
+
+    # 步骤7：下载软件包
+    - name: ⏬ Download Packages
+      run: |
         make defconfig
-        make download -j8
-        find dl -size -1024c -exec ls -l {} \;
-        find dl -size -1024c -exec rm -f {} \;
+        make download -j$(nproc)
+        # 检查并重新下载损坏的包
+        find dl -size -1024c -delete
 
-    - name: Compile the firmware
-      id: compile
+    # 步骤8：开始编译固件
+    - name: 🔥 Start Compilation
+      timeout-minutes: 180 # 设置超时时间，避免占用过长时间
       run: |
-        cd openwrt
-        echo -e "$(nproc) thread compile"
-        make -j$(nproc) || make -j1 || make -j1 V=s
-        echo "status=success" >> $GITHUB_OUTPUT
-        grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
-        [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
-        echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
+        echo "开始编译，使用 $(nproc) 个线程..."
+        make -j$(nproc) V=s 2>&1 | tee compile.log || {
+          echo "并行编译失败，尝试单线程编译..."
+          make -j1 V=s 2>&1 | tee -a compile.log
+        }
 
-    - name: Check space usage
-      if: (!cancelled())
-      run: df -hT
+    # 步骤9：整理编译产物
+    - name: 📦 Organize Firmware Files
+      if: success()
+      run: |
+        FIRMWARE_DIR=$(find bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }} -name "*${{ env.TARGET_PROFILE }}*" -type d | head -1)
+        if [ -n "$FIRMWARE_DIR" ]; then
+          echo "FIRMWARE_PATH=$FIRMWARE_DIR" >> $GITHUB_ENV
+          cd $FIRMWARE_DIR
+          rm -rf packages  # 移除软件包目录，仅保留固件
+          echo "固件文件列表："
+          ls -lh
+        else
+          echo "错误：未找到固件目录！"
+          exit 1
+        fi
 
-    - name: Upload bin directory
-      uses: actions/upload-artifact@main
-      if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
+    # 步骤10：上传固件为 Artifact（可直接下载）
+    - name: ⬆️ Upload Firmware as Artifact
+      if: env.UPLOAD_FIRMWARE == 'true' && success()
+      uses: actions/upload-artifact@v4
       with:
-        name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
-        path: openwrt/bin
+        name: ImmortalWrt_x86-64_Firmware
+        path: ${{ env.FIRMWARE_PATH }}/*.img.gz
+        retention-days: 7
 
-    - name: Organize files
-      id: organize
-      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
-      run: |
-        cd openwrt/bin/targets/*/*
-        rm -rf packages
-        echo "FIRMWARE=$PWD" >> $GITHUB_ENV
-        echo "status=success" >> $GITHUB_OUTPUT
-
-    - name: Upload firmware directory
-      uses: actions/upload-artifact@main
-      if: steps.organize.outputs.status == 'success' && !cancelled()
-      with:
-        name: OpenWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
-        path: ${{ env.FIRMWARE }}
-
-    - name: Generate release tag
-      id: tag
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
-      run: |
-        echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
-        touch release.txt
-        [ ${UPLOAD_GOFILE} = true && ${{ steps.gofile.outputs.url }} ] && echo "🔗 [GoFile](${{ steps.gofile.outputs.url }})" >> release.txt
-        echo "status=success" >> $GITHUB_OUTPUT
-
-    - name: Upload firmware to release
-      uses: softprops/action-gh-release@master
-      if: steps.tag.outputs.status == 'success' && !cancelled()
+    # 步骤11：创建 GitHub Release 并上传固件
+    - name: 🏷️ Create Release and Upload
+      if: env.UPLOAD_RELEASE == 'true' && success()
+      uses: softprops/action-gh-release@v2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ steps.tag.outputs.release_tag }}
-        body_path: release.txt
-        files: ${{ env.FIRMWARE }}/*
-
-    - name: Delete workflow runs
-      uses: Mattraks/delete-workflow-runs@main
-      with:
-        retain_days: 0
-        keep_minimum_runs: 2
-
-    - name: Remove old Releases
-      uses: dev-drprasad/delete-older-releases@master
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
-      with:
-        keep_latest: 3
-        delete_tags: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        tag_name: build-${{ github.run_number }}-$(date +'%Y%m%d')
+        name: ImmortalWrt x86-64 Build #${{ github.run_number }} ($(date +'%Y-%m-%d'))
+        body: |
+          基于 ImmortalWrt ${{ env.REPO_BRANCH }} 分支自动编译的 x86-64 固件。
+          **构建信息**:
+          - 版本: ImmortalWrt ${{ env.REPO_BRANCH }}
+          - 内核: 6.12
+          - 构建日期: $(date)
+          - 运行编号: #${{ github.run_number }}
+          **包含插件**:
+          - 网络增强: AdGuardHome, OpenClash, PassWall, TurboACC, UPNP
+          - 系统工具: Dockerman, AutoUpdate, CPU Freq, 带宽监控
+          - 文件共享: Samba4, USB打印机
+          - 安全防护: AppFilter, Adbyby+, Fail2ban
+          - 主题: Argon, Material
+        draft: false
+        prerelease: false
+        files: ${{ env.FIRMWARE_PATH }}/*.img.gz
