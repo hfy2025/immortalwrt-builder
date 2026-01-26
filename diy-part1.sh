@@ -13,7 +13,7 @@ sed -i "/timezone='CST-8'/a\ \ \ \ \ \ \ \ set system.@system[-1].zonename='Asia
 # 4. 可选：添加第三方插件源到 feeds.conf.default
 # 由于我们要编译的插件较多，建议在此添加必要的第三方源
 # 例如 Passwall 的源（注意：可能导致依赖冲突）
-echo "src-git passwall https://github.com/xiaorouji/openwrt-passwall;packages" >> feeds.conf.default
-echo "src-git passwall2 https://github.com/xiaorouji/openwrt-passwall2;main" >> feeds.conf.default
+src-git passwall https://github.com/xiaorouji/openwrt-passwall;packages
+src-git passwall2 https://github.com/xiaorouji/openwrt-passwall2;luci
 
 echo "第一阶段自定义配置完成！"
