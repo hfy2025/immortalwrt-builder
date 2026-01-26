@@ -130,19 +130,34 @@ jobs:
 
     # 步骤9：整理编译产物
     - name: 📦 Organize Firmware Files
-      if: success()
+      id: organize
+      if: success() && env.UPLOAD_FIRMWARE == 'true'
+      # 关键：确保在 openwrt 源码根目录下执行
+      working-directory: ${{ github.workspace }}/openwrt
       run: |
-        FIRMWARE_DIR=$(find bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }} -name "*${{ env.TARGET_PROFILE }}*" -type d | head -1)
-        if [ -n "$FIRMWARE_DIR" ]; then
-          echo "FIRMWARE_PATH=$FIRMWARE_DIR" >> $GITHUB_ENV
-          cd $FIRMWARE_DIR
-          rm -rf packages  # 移除软件包目录，仅保留固件
-          echo "固件文件列表："
-          ls -lh
-        else
-          echo "错误：未找到固件目录！"
+        echo "开始整理固件文件..."
+        # 1. 定位固件目录（使用更通用的查找方式）
+        FIRMWARE_DIR=$(find bin/targets -type d -name "*${{ env.TARGET_PROFILE }}*" 2>/dev/null | head -1)
+        
+        if [ -z "$FIRMWARE_DIR" ]; then
+          # 如果没找到，尝试列出 targets 下所有目录辅助调试
+          echo "警告：未找到包含 '${{ env.TARGET_PROFILE }}' 的固件目录。"
+          echo "调试信息 - bin/targets 结构："
+          find bin/targets -type d 2>/dev/null || echo "bin/targets 目录不存在"
+          echo "错误：未找到固件目录！编译可能未成功生成固件。"
           exit 1
         fi
+        
+        echo "找到固件目录：$FIRMWARE_DIR"
+        cd "$FIRMWARE_DIR"
+        # 移除软件包目录，仅保留固件
+        rm -rf packages 2>/dev/null || true
+        echo "固件文件列表："
+        ls -lh
+        
+        # 设置输出变量供后续步骤使用
+        echo "FIRMWARE_PATH=$(pwd)" >> $GITHUB_ENV
+        echo "status=success" >> $GITHUB_OUTPUT
 
     # 步骤10：上传固件为 Artifact（可直接下载）
     - name: ⬆️ Upload Firmware as Artifact
