@@ -111,11 +111,12 @@ jobs:
 
     # 步骤7：下载软件包
     - name: ⏬ Download Packages
+      working-directory: ${{ github.workspace }}/openwrt
       run: |
         make defconfig
-        make download -j$(nproc)
-        # 检查并重新下载损坏的包
-        find dl -size -1024c -delete
+        make download -j8
+        find dl -size -1024c -exec ls -l {} \;
+        find dl -size -1024c -exec rm -f {} \;
 
     # 步骤8：开始编译固件
     - name: 🔥 Start Compilation
