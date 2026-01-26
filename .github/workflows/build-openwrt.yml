@@ -70,14 +70,12 @@ jobs:
         
     # 步骤4：执行第一阶段自定义脚本
     - name: 🔨 Run DIY Script Part 1
-      working-directory: ${{ github.workspace }}/openwrt
+      working-directory: ${{ github.workspace }}/openwrt  # 正确设定工作目录
       run: |
-        if [ -f ${{ github.workspace }}/repository/diy-part1.sh ]; then
-          cp ${{ github.workspace }}/repository/diy-part1.sh .
-          chmod +x diy-part1.sh
-          ./diy-part1.sh
-        fi
-
+        # 此时已在 openwrt 目录下，直接运行脚本
+        chmod +x ${{ github.workspace }}/repository/diy-part1.sh
+        ${{ github.workspace }}/repository/diy-part1.sh
+        
     # 步骤5：更新并安装所有软件包源
     - name: 📦 Update and Install Feeds
       working-directory: ${{ github.workspace }}/openwrt
