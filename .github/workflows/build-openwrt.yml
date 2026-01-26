@@ -125,6 +125,9 @@ jobs:
         echo "开始编译，使用 $(nproc) 个线程..."
         make -j$(nproc) V=s 2>&1 | tee compile.log || {
           echo "并行编译失败，尝试单线程编译..."
+          echo "=== 调试：检查当前配置的目标 ==="
+          grep ^CONFIG_TARGET_ .config || echo "找不到 .config 文件"
+          grep ^CONFIG_TARGET_ARCH .config || echo "未设置架构"
           make -j1 V=s 2>&1 | tee -a compile.log
         }
 
