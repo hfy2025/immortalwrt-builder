@@ -23,12 +23,6 @@ env:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    container:
-      image: ubuntu:22.04
-    defaults:
-      run:
-        working-directory: /home/build/openwrt
-
     steps:
     # 步骤1：检出本仓库代码（获取本文件及下面的 diy 脚本、config）
     - name: 🚚 Checkout Repository
@@ -54,8 +48,9 @@ jobs:
 
     # 步骤3：克隆 ImmortalWrt 源码
     - name: 📥 Clone Source Code
+      working-directory: ${{ github.workspace }}
       run: |
-        git clone $REPO_URL -b $REPO_BRANCH /home/build/openwrt
+        git clone $REPO_URL -b $REPO_BRANCH openwrt
         cd /home/build/openwrt
         # 应用自定义 feeds 配置（如果存在）
         [ -f /home/build/repository/feeds.conf.custom ] && cp /home/build/repository/feeds.conf.custom feeds.conf.default
