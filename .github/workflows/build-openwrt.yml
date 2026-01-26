@@ -125,6 +125,10 @@ jobs:
         echo “=== 步骤5: 清理无效的下载缓存 ==="
         find dl -size -1024c -delete 2>/dev/null || true
 
+    - name: 🛠️ Debug with SSH (手动配置)
+      if: false  # 默认不运行，需要时改为 true
+      uses: mxschmitt/action-tmate@v3
+  
     # 步骤8：开始编译固件
     - name: 🔥 Start Compilation
       timeout-minutes: 180 # 设置超时时间，避免占用过长时间
