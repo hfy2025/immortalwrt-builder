@@ -60,6 +60,20 @@ jobs:
         # 应用自定义 feeds 配置（如果存在）
         [ -f /home/build/repository/feeds.conf.custom ] && cp /home/build/repository/feeds.conf.custom feeds.conf.default
 
+    - name: 🔍 Debug - List Files
+      run: |
+        pwd
+        ls -la
+        echo "=== 检查仓库文件 ==="
+        find $GITHUB_WORKSPACE -type f -name "*.sh" -o -name ".config" | head -20
+
+    - name: 🔍 Debug - Verify Env
+      run: |
+        echo "=== 检查基础命令 ==="
+        which bash make git gcc
+        echo "=== 检查目录 ==="
+        ls -la /home/build/openwrt || echo "openwrt目录可能还不存在"
+        
     # 步骤4：执行第一阶段自定义脚本
     - name: 🔨 Run DIY Script Part 1
       run: |
