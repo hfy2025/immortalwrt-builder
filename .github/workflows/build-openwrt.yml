@@ -50,9 +50,7 @@ jobs:
     - name: 📥 Clone Source Code
       run: |
         git clone $REPO_URL -b $REPO_BRANCH openwrt
-        cd /home/build/openwrt
-        # 应用自定义 feeds 配置（如果存在）
-        [ -f /home/build/repository/feeds.conf.custom ] && cp /home/build/repository/feeds.conf.custom feeds.conf.default
+        echo "源码克隆完成，目录位于: $(pwd)/openwrt"
 
     - name: 🔍 DEBUG - Find The Bad Line
       run: |
@@ -82,11 +80,14 @@ jobs:
         
     # 步骤4：执行第一阶段自定义脚本
     - name: 🔨 Run DIY Script Part 1
-      working-directory: ${{ github.workspace }}/openwrt  # 正确设定工作目录
+      working-directory: ${{ github.workspace }}/openwrt
       run: |
-        # 此时已在 openwrt 目录下，直接运行脚本
-        chmod +x ${{ github.workspace }}/repository/diy-part1.sh
-        ${{ github.workspace }}/repository/diy-part1.sh
+        # 脚本会在正确的 openwrt 目录下执行，无需再 cd
+        if [ -f ${{ github.workspace }}/repository/diy-part1.sh ]; then
+          cp ${{ github.workspace }}/repository/diy-part1.sh .
+          chmod +x diy-part1.sh
+          ./diy-part1.sh
+        fi
         
     # 步骤5：更新并安装所有软件包源
     - name: 📦 Update and Install Feeds
@@ -97,15 +98,15 @@ jobs:
 
     # 步骤6：执行第二阶段自定义脚本并应用配置文件
     - name: 🔨 Run DIY Script Part 2 & Load Config
+      working-directory: ${{ github.workspace }}/openwrt
       run: |
         # 应用配置文件
-        [ -f /home/build/repository/.config ] && cp /home/build/repository/.config .config
-        # 应用自定义文件（如网络、防火墙配置）
-        [ -d /home/build/repository/files ] && cp -rf /home/build/repository/files/* files/
+        [ -f ${{ github.workspace }}/.config ] && cp ${{ github.workspace }}/.config .config
         # 运行第二阶段脚本
-        if [ -f /home/build/repository/diy-part2.sh ]; then
-          chmod +x /home/build/repository/diy-part2.sh
-          /home/build/repository/diy-part2.sh
+        if [ -f ${{ github.workspace }}/repository/diy-part2.sh ]; then
+          cp ${{ github.workspace }}/repository/diy-part2.sh .
+          chmod +x diy-part2.sh
+          ./diy-part2.sh
         fi
 
     # 步骤7：下载软件包
